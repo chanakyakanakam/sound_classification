@@ -1,0 +1,5 @@
+# Path: /home/chanakya/sound_classification/.gitignore
+
+6_dB_pump/
+.env
+__pycache__/

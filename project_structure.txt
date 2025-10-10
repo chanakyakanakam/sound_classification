@@ -1,0 +1,56 @@
+# Path: /home/chanakya/sound_classification/project_structure.txt
+
+sound_classification/
+│
+│── 6_dB_pump/
+│   └── pump                      # pump data
+│       └── id_00                 # id_00 sensor data
+│           └── abnormal          # id_00 abnormal data
+│           └── normal            # id_00 normal data
+│
+│       └── id_02                 # id_02 sensor data
+│       └── id_04                 # id_04 sensor data
+│       └── id_06                 # id_06 sensor data
+│
+├── api/
+│   └── main.py                   # FastAPI backend
+│
+├── config/
+│   └── config.py                 # Configuration settings
+│
+├── data/
+│   ├── raw/                      # Raw audio files
+│   ├── processed/                # Processed features
+│   └── models/                   # Saved models and scalers
+│
+├── src/
+│   ├── __init__.py
+│   ├── feature_extraction.py    # Audio feature extraction
+│   ├── data_preprocessing.py    # Data loading and preprocessing
+│   ├── model.py                  # Model architecture
+│   ├── train.py                  # Training pipeline
+│   └── inference.py              # Prediction pipeline
+│
+├── ui/
+│   ├── __init__.py
+│   └── streamlit_app.py          # Streamlit frontend
+│
+├── utils/
+│   ├── __init__.py
+│   └── logger.py                 # Logging utilities
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_features.py
+│   └── test_model.py
+│
+├── Visualizations/               # Visualizations created by .ipynb file
+├── .env                          # Environment variables
+├── .gitignore                    # Ignoring files & folder to git
+├── AI_audio_guide.docx           # Domain knowledge book
+├── project_structure.txt         # File dependency structure
+├── pump_test.ipynb               # Pump test jupyter notebook
+├── pump.py                       # Single python code to test the code
+├── requirements.txt              # Python dependencies
+├── README.md                     # Project documentation
+└── setup.py                      # Package setup
