@@ -13,20 +13,22 @@ sound_classification/
 │       └── id_06                 # id_06 sensor data
 │
 ├── api/
+│   ├── __init__.py
 │   └── main.py                   # FastAPI backend
 │
 ├── config/
 │   └── config.py                 # Configuration settings
 │
-├── data/
-│   ├── raw/                      # Raw audio files
-│   ├── processed/                # Processed features
-│   └── models/                   # Saved models and scalers
+├── models/
+│   ├── pump_net_best_model.keras 
+│   ├── pump_net_results.pkl      
+│   └── pump_net_scaler.pkl          
 │
 ├── src/
 │   ├── __init__.py
-│   ├── feature_extraction.py    # Audio feature extraction
 │   ├── data_preprocessing.py    # Data loading and preprocessing
+│   ├── explainability.py        # Justification to the predictions
+│   ├── feature_extraction.py    # Audio feature extraction
 │   ├── model.py                  # Model architecture
 │   ├── train.py                  # Training pipeline
 │   └── inference.py              # Prediction pipeline
@@ -39,12 +41,7 @@ sound_classification/
 │   ├── __init__.py
 │   └── logger.py                 # Logging utilities
 │
-├── tests/
-│   ├── __init__.py
-│   ├── test_features.py
-│   └── test_model.py
-│
-├── Visualizations/               # Visualizations created by .ipynb file
+├── visualizations/               # Visualizations created by .ipynb file
 ├── .env                          # Environment variables
 ├── .gitignore                    # Ignoring files & folder to git
 ├── AI_audio_guide.docx           # Domain knowledge book

@@ -4,17 +4,63 @@ Path: /home/chanakya/sound_classification/api/main.py
 FastAPI Backend for Pump-Net
 RESTful API for audio anomaly detection
 """
+import os
+import sys
+import contextlib
+
+# Suppress TensorFlow logs BEFORE import
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
+# Context manager to suppress stderr (for absl warnings)
+@contextlib.contextmanager
+def suppress_stderr():
+    """Temporarily suppress stderr output"""
+    original_stderr = sys.stderr
+    sys.stderr = open(os.devnull, 'w')
+    try:
+        yield
+    finally:
+        sys.stderr.close()
+        sys.stderr = original_stderr
+
+# Suppress all Python warnings
+import warnings
+warnings.filterwarnings('ignore')
+
+# Suppress TensorFlow specific warnings
+import logging
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+logging.getLogger('absl').setLevel(logging.ERROR)
+
+# Import TensorFlow with stderr suppressed (prevents absl C++ warnings)
+with suppress_stderr():
+    import tensorflow as tf
+
+from pathlib import Path
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import tempfile
 from pathlib import Path
 import uvicorn
+import numpy as np
+
+# Silent imports
 from config.config import settings
 from utils.logger import logger
 from src.inference import PumpNetInference
+
+# Global variables (initialized later in startup event)
+inference_pipeline = None
+explainability_available = False
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -32,13 +78,60 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize inference pipeline
-try:
-    inference_pipeline = PumpNetInference()
-    logger.info("Inference pipeline loaded successfully")
-except Exception as e:
-    logger.error(f"Failed to load inference pipeline: {e}")
-    inference_pipeline = None
+# Startup event - runs ONCE when server starts
+@app.on_event("startup")
+async def startup_event():
+    """Initialize models on server startup"""
+    global inference_pipeline, explainability_available
+    
+    try:
+        logger.info("Initializing inference pipeline...")
+        
+        # Suppress stderr during model loading (prevents GPU messages)
+        with suppress_stderr():
+            inference_pipeline = PumpNetInference()
+        
+        # Check explainability with defensive coding
+        if inference_pipeline.explainability_engine is not None:
+            engine = inference_pipeline.explainability_engine
+            
+            # Double-check training_data exists
+            if engine.training_data is not None and isinstance(engine.training_data, dict):
+                try:
+                    # Safely access training data
+                    features = engine.training_data.get('features')
+                    labels = engine.training_data.get('labels')
+                    
+                    if features is not None and labels is not None:
+                        explainability_available = True
+                        n_samples = len(features)
+                        n_normal = int(np.sum(labels == 0))
+                        n_abnormal = int(np.sum(labels == 1))
+                        
+                        logger.info("=" * 70)
+                        logger.info("✅ PUMP-NET API READY")
+                        logger.info("=" * 70)
+                        logger.info(f"🤖 Model:         Loaded")
+                        logger.info(f"🧠 Explainability: Enabled")
+                        logger.info(f"📊 Training Data:  {n_samples} samples ({n_normal} normal, {n_abnormal} abnormal)")
+                        logger.info(f"📍 API:           http://{settings.API_HOST}:{settings.API_PORT}")
+                        logger.info(f"📚 Docs:          http://{settings.API_HOST}:{settings.API_PORT}/docs")
+                        logger.info("=" * 70)
+                    else:
+                        logger.warning("⚠️ Explainability: training data features/labels are None")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not read training data details: {e}")
+            else:
+                logger.warning("⚠️ Explainability engine loaded but training data not available")
+        else:
+            logger.warning("⚠️ Explainability engine not available")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to load inference pipeline: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        inference_pipeline = None
 
 # Response models
 class PredictionResponse(BaseModel):
@@ -50,10 +143,12 @@ class PredictionResponse(BaseModel):
     is_confident: bool
     threshold_used: float
     message: str
+    explainability: dict
 
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
+    explainability_available: bool
     version: str
 
 @app.get("/", response_model=dict)
@@ -68,46 +163,50 @@ async def root():
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint"""
+    exp_available = False
+    
+    # Safely check explainability
+    if inference_pipeline and inference_pipeline.explainability_engine:
+        engine = inference_pipeline.explainability_engine
+        if engine.training_data is not None and isinstance(engine.training_data, dict):
+            exp_available = engine.training_data.get('features') is not None
+    
     return HealthResponse(
         status="healthy" if inference_pipeline else "unhealthy",
         model_loaded=inference_pipeline is not None,
+        explainability_available=exp_available,
         version="1.0.0"
     )
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...)):
-    """
-    Predict anomaly from uploaded audio file
-    """
+    """Predict anomaly from uploaded audio file"""
     if inference_pipeline is None:
         raise HTTPException(status_code=500, detail="Model not loaded")
     
-    # Validate file type - Fixed: Handle None filename
     if not file.filename or not file.filename.endswith('.wav'):
         raise HTTPException(status_code=400, detail="Only .wav files are supported")
     
     try:
-        # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
             content = await file.read()
             tmp_file.write(content)
             tmp_path = Path(tmp_file.name)
         
-        logger.info(f"Processing uploaded file: {file.filename}")
+        logger.info(f"Processing: {file.filename}")
         
-        # Make prediction
-        result = inference_pipeline.predict_from_file(tmp_path)
+        result = inference_pipeline.predict_from_file(tmp_path, include_explainability=True)
         
-        # Clean up temp file
         tmp_path.unlink()
         
-        # Add message
         if result['prediction'] == 'Abnormal':
             message = "⚠️ ANOMALY DETECTED! Pump requires inspection."
         else:
             message = "✅ Normal operation. No anomalies detected."
         
         result['message'] = message
+        
+        logger.info(f"Result: {result['prediction']} ({result['confidence']*100:.1f}%)")
         
         return PredictionResponse(**result)
         
@@ -117,15 +216,7 @@ async def predict(file: UploadFile = File(...)):
 
 @app.post("/predict_batch")
 async def predict_batch(files: list[UploadFile] = File(...)):
-    """
-    Batch prediction for multiple audio files
-    
-    Args:
-        files: List of audio files
-    
-    Returns:
-        List of predictions
-    """
+    """Batch prediction for multiple audio files"""
     if inference_pipeline is None:
         raise HTTPException(status_code=500, detail="Model not loaded")
     
@@ -138,7 +229,7 @@ async def predict_batch(files: list[UploadFile] = File(...)):
                 tmp_file.write(content)
                 tmp_path = Path(tmp_file.name)
             
-            result = inference_pipeline.predict_from_file(tmp_path)
+            result = inference_pipeline.predict_from_file(tmp_path, include_explainability=False)
             result['filename'] = file.filename
             results.append(result)
             
@@ -154,10 +245,23 @@ async def predict_batch(files: list[UploadFile] = File(...)):
     return {"results": results}
 
 if __name__ == "__main__":
-    logger.info(f"Starting Pump-Net API on {settings.API_HOST}:{settings.API_PORT}")
-    uvicorn.run(
+    print("\n" + "="*70)
+    print("🚀 STARTING PUMP-NET API")
+    print("="*70)
+    print(f"📍 URL:  http://{settings.API_HOST}:{settings.API_PORT}")
+    print(f"📚 Docs: http://{settings.API_HOST}:{settings.API_PORT}/docs")
+    print("="*70)
+    print("⏳ Loading models... Please wait...")
+    print("="*70 + "\n")
+    
+    # Use server directly to avoid worker spawn issues
+    config = uvicorn.Config(
         "api.main:app",
         host=settings.API_HOST,
         port=settings.API_PORT,
-        reload=settings.API_RELOAD
+        reload=False,
+        log_level="info",
+        access_log=True
     )
+    server = uvicorn.Server(config)
+    server.run()

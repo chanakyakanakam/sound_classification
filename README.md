@@ -30,6 +30,8 @@ pump-net-production/
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\\Scripts\\activate
 
+conda create --name myenv python=3.11 y
+
 # Install dependencies
 pip install -r requirements.txt
 ```
@@ -43,7 +45,8 @@ python -m src.train
 ### 3. Start API Server
 ```bash
 # Terminal 1: Start FastAPI backend
-python api/main.py
+cd /home/chanakya/sound_classification
+python -m api.main
 
 # Or using uvicorn
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -52,7 +55,7 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ### 4. Start UI
 ```bash
 # Terminal 2: Start Streamlit frontend
-streamlit run ui/streamlit_app.py --server.port 8501
+streamlit run ui/streamlit_app.py 
 ```
 
 ### 5. Access Application

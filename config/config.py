@@ -1,7 +1,5 @@
 """
 Configuration Management for Pump-Net Production System
-Updated to use original data location in WSL2
-
 Path: /home/chanakya/sound_classification/config/config.py
 """
 
@@ -24,26 +22,18 @@ class Settings:
         self.ABNORMAL_PATH = self.ORIGINAL_DATA_DIR / "abnormal"
         self.NORMAL_PATH = self.ORIGINAL_DATA_DIR / "normal"
         
-        # Output directories
-        self.DATA_DIR = self.BASE_DIR / "data"
-        self.RAW_DATA_DIR = self.DATA_DIR / "raw"
-        self.PROCESSED_DATA_DIR = self.DATA_DIR / "processed"
-        self.MODELS_DIR = self.DATA_DIR / "models"
+        # Model directory (no "data" subdirectory)
+        self.MODELS_DIR = self.BASE_DIR / "models"
         
         # Visualization output
-        self.VISUALIZATION_DIR = self.BASE_DIR / "Visualizations"
-        
-        # Logs
-        self.LOG_DIR = self.BASE_DIR / "logs"
-        self.LOG_FILE = self.LOG_DIR / "pump_net.log"
+        self.VISUALIZATION_DIR = self.BASE_DIR / "visualizations"
         
         # ========================================================================
         # MODEL FILES
         # ========================================================================
         self.MODEL_PATH = self.MODELS_DIR / "pump_net_best_model.keras"
         self.SCALER_PATH = self.MODELS_DIR / "pump_net_scaler.pkl"
-        self.FEATURE_NAMES_PATH = self.MODELS_DIR / "feature_names.pkl"
-        self.TRAINING_HISTORY_PATH = self.MODELS_DIR / "training_history.pkl"
+        self.TRAINING_REFERENCE_PATH = self.MODELS_DIR / "training_reference.pkl"
         
         # ========================================================================
         # AUDIO PARAMETERS
@@ -84,8 +74,8 @@ class Settings:
         # ========================================================================
         # TRAINING PARAMETERS
         # ========================================================================
-        self.BATCH_SIZE = 32
-        self.EPOCHS = 150
+        self.BATCH_SIZE = 16
+        self.EPOCHS = 100
         self.LEARNING_RATE = 0.001
         self.PATIENCE = 20
         
@@ -102,11 +92,21 @@ class Settings:
         self.CONFIDENCE_THRESHOLD = 0.7
         
         # ========================================================================
+        # EXPLAINABILITY SETTINGS
+        # ========================================================================
+        self.KNN_NEIGHBORS = 3  # Number of similar examples to find
+        self.KNN_ADAPTIVE = False  # Use adaptive K based on dataset size
+        self.PROJECTION_METHOD = "tsne"  # 'pca' or 'tsne'
+        self.CLUSTERING_METHOD = "dbscan"  # 'dbscan' or 'kmeans'
+        self.DBSCAN_EPS = 0.5
+        self.DBSCAN_MIN_SAMPLES = 5
+        
+        # ========================================================================
         # API SETTINGS
         # ========================================================================
         self.API_HOST = "0.0.0.0"
         self.API_PORT = 8000
-        self.API_RELOAD = True
+        self.API_RELOAD = False  # Set to False for production (avoids triple initialization)
         self.API_WORKERS = 1
         self.CORS_ORIGINS = ["*"]
         
@@ -132,12 +132,6 @@ class Settings:
         self.MIXED_PRECISION = False
         
         # ========================================================================
-        # FEATURE CACHING
-        # ========================================================================
-        self.CACHE_FEATURES = True
-        self.FEATURE_CACHE_PATH = self.PROCESSED_DATA_DIR / "feature_cache.pkl"
-        
-        # ========================================================================
         # DATA LOADING
         # ========================================================================
         self.MAX_FILES_NORMAL: Optional[int] = None
@@ -152,12 +146,8 @@ class Settings:
     def _create_directories(self):
         """Create necessary directories if they don't exist"""
         directories = [
-            self.DATA_DIR,
-            self.RAW_DATA_DIR,
-            self.PROCESSED_DATA_DIR,
             self.MODELS_DIR,
             self.VISUALIZATION_DIR,
-            self.LOG_DIR,
         ]
         
         for directory in directories:
@@ -168,7 +158,6 @@ class Settings:
         env_file = self.BASE_DIR / ".env"
         if env_file.exists():
             try:
-
                 load_dotenv(env_file)
                 
                 # Override with environment variables if they exist
@@ -253,6 +242,11 @@ TRAINING:
 PREDICTION:
    Threshold:         {self.PREDICTION_THRESHOLD}
    Confidence:        {self.CONFIDENCE_THRESHOLD}
+
+EXPLAINABILITY:
+   KNN Neighbors:     {self.KNN_NEIGHBORS}
+   Projection:        {self.PROJECTION_METHOD}
+   Clustering:        {self.CLUSTERING_METHOD}
 
 API SETTINGS:
    Host:              {self.API_HOST}

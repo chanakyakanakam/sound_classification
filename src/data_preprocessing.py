@@ -78,7 +78,6 @@ class AudioDataLoader:
         logger.info(f"Successfully loaded {len(audio_files)} files")
         return audio_files, labels, sample_rate
 
-
 class AudioAugmentor:
     """Apply data augmentation to audio signals"""
     
